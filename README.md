@@ -1,6 +1,6 @@
 ![demo](https://github.com/docker-run/tmux-claude-usage/releases/download/media/demo.gif)
 
-[![Download](https://img.shields.io/badge/Download-v1.0.0-2ea44f)](https://github.com/docker-run/tmux-claude-usage/releases/latest)
+[![Download](https://img.shields.io/badge/Download-v1.1.0-2ea44f)](https://github.com/docker-run/tmux-claude-usage/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://github.com/docker-run/tmux-claude-usage/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/docker-run/tmux-claude-usage/actions/workflows/shellcheck.yml)
 
