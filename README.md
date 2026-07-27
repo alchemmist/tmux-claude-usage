@@ -2,7 +2,7 @@
 
 [![Download](https://img.shields.io/badge/Download-v1.1.0-2ea44f)](https://github.com/docker-run/tmux-claude-usage/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build](https://github.com/docker-run/tmux-claude-usage/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/docker-run/tmux-claude-usage/actions/workflows/shellcheck.yml)
+[![Build](https://github.com/alchemmist/tmux-claude-usage/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/alchemmist/tmux-claude-usage/actions/workflows/shellcheck.yml)
 
 Your Claude usage — progress bar, percent, and reset time — right in the tmux status bar. It uses the official usage data Claude Code already receives — no API calls, no tokens, no rate limits — and updates live as you work.
 
@@ -120,7 +120,7 @@ in the background so a slow disk never stalls a redraw.
 **1. Add the plugin** via [TPM](https://github.com/tmux-plugins/tpm):
 
 ```tmux
-set -g @plugin 'docker-run/tmux-claude-usage'
+set -g @plugin 'alchemmist/tmux-claude-usage'
 ```
 
 **2. Place the segment** in your status line:
@@ -157,7 +157,7 @@ Use Claude Code normally and the bar fills in.
 Clone it anywhere and source the entry point from your `tmux.conf`:
 
 ```sh
-git clone https://github.com/docker-run/tmux-claude-usage \
+git clone https://github.com/alchemmist/tmux-claude-usage \
   ~/.tmux/plugins/tmux-claude-usage
 ```
 
