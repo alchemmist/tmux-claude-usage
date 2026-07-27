@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 #
-# tmux segment — reads the harvested usage cache and renders the status bar
-# text: a progress bar, "NN% used", and a human reset time. Pure bash, no
-# network, no jq; runs on every status-line redraw.
+# tmux segment — reads the harvested usage caches and renders the status bar
+# text for Claude and (optionally) Codex. Pure bash, no network, no jq; runs on
+# every status-line redraw.
+#
+# Two render styles: the original multi-cell `bar`, and `gauge`, which collapses
+# the whole bar into a single Nerd Font pie glyph so several assistants fit in a
+# status line without crowding out the window list.
 
 set -uo pipefail
 
@@ -11,31 +15,17 @@ set -uo pipefail
 # locale (de_DE, fr_FR, pt_BR, …) the printf '%.0f' below fails to parse it,
 # drops the window, and leaves a silent empty bar. Set as a variable (not a
 # command prefix) so bash 3.2 — macOS's /usr/bin/env bash — re-runs setlocale;
-# the prefix form does nothing there. The segment emits only ASCII and raw
-# UTF-8 bar bytes, so forcing C has no other effect.
+# the prefix form does nothing there. The segment emits only ASCII, raw UTF-8
+# glyph bytes and tmux style escapes, so forcing C has no other effect.
 export LC_ALL=C
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
 source "$DIR/helpers.sh"
 
-CACHE_FILE="$(usage_cache_file)"
-[ -f "$CACHE_FILE" ] || exit 0
-
-# Load the harvested values without sourcing (no code execution from the file).
-five_pct="" five_reset="" seven_pct="" seven_reset="" updated_at=""
-while IFS='=' read -r key val; do
-	case "$key" in
-	FIVE_HOUR_PCT) five_pct="$val" ;;
-	FIVE_HOUR_RESET) five_reset="$val" ;;
-	SEVEN_DAY_PCT) seven_pct="$val" ;;
-	SEVEN_DAY_RESET) seven_reset="$val" ;;
-	UPDATED_AT) updated_at="$val" ;;
-	esac
-done <"$CACHE_FILE"
-
 # Options
-show="$(get_tmux_option @claude_usage_show session)"          # session | weekly | all
+show="$(get_tmux_option @claude_usage_show session)" # session | weekly | all
+style="$(get_tmux_option @claude_usage_style bar)"   # bar | gauge
 bar_width="$(get_tmux_option @claude_usage_bar_width 10)"
 bar_full="$(get_tmux_option @claude_usage_bar_full '█')"
 bar_empty="$(get_tmux_option @claude_usage_bar_empty '░')"
@@ -48,12 +38,56 @@ prefix="$(get_tmux_option @claude_usage_prefix '')"
 separator="$(get_tmux_option @claude_usage_separator '  ')"
 stale_after="$(get_tmux_option @claude_usage_stale_after '')"
 stale_label="$(get_tmux_option @claude_usage_stale_label 'stale')"
+icon="$(get_tmux_option @claude_usage_icon '')"
+# Labels hold steady while the reading changes colour. Defaults to the normal
+# (below-threshold) colour, so out of the box a label looks like an unremarkable
+# reading rather than an alarming one. Set it to "none" to leave labels unstyled
+# and inherit the status line — an empty value can't say that, since tmux gives
+# an option set to "" and an option never set the same way.
+label_color="$(get_tmux_option @claude_usage_label_color "$(get_tmux_option @claude_usage_color_normal '')")"
+[ "$label_color" = none ] && label_color=""
+codex="$(get_tmux_option @claude_usage_codex off)" # off | on — show Codex weekly
+codex_icon="$(get_tmux_option @claude_usage_codex_icon '')"
 
 now="$(date +%s)"
 
-# Build one window's text. Args: percent reset_epoch label.
+# Kick off a Codex refresh before rendering. Backgrounded and detached: the
+# scrape walks session logs off disk, and the status line must not wait on it.
+# This render uses whatever is already cached; the next one picks up the result.
+if [ "$codex" = on ] && [ -x "$DIR/codex.sh" ]; then
+	("$DIR/codex.sh" >/dev/null 2>&1 &) 2>/dev/null
+fi
+
+# Load harvested values without sourcing (no code execution from cache files).
+five_pct="" five_reset="" seven_pct="" seven_reset="" updated_at=""
+codex_pct="" codex_reset=""
+
+read_cache() {
+	local file="$1" key val
+	[ -f "$file" ] || return 0
+	while IFS='=' read -r key val; do
+		case "$key" in
+		FIVE_HOUR_PCT) five_pct="$val" ;;
+		FIVE_HOUR_RESET) five_reset="$val" ;;
+		SEVEN_DAY_PCT) seven_pct="$val" ;;
+		SEVEN_DAY_RESET) seven_reset="$val" ;;
+		CODEX_WEEK_PCT) codex_pct="$val" ;;
+		CODEX_WEEK_RESET) codex_reset="$val" ;;
+		UPDATED_AT) updated_at="$val" ;;
+		esac
+	done <"$file"
+}
+
+# Claude first, so its UPDATED_AT is the one the staleness marker reports —
+# that marker documents the harvester, which only Claude has.
+read_cache "$(usage_cache_file)"
+claude_updated_at="$updated_at"
+[ "$codex" = on ] && read_cache "$(codex_cache_file)"
+updated_at="$claude_updated_at"
+
+# Build one window's text. Args: percent reset_epoch label icon.
 window_segment() {
-	local pct_raw="$1" reset_epoch="$2" label="$3"
+	local pct_raw="$1" reset_epoch="$2" label="$3" seg_icon="${4:-}"
 	[ -n "$pct_raw" ] || return 1
 
 	local pct
@@ -74,12 +108,39 @@ window_segment() {
 		have_reset=0
 	fi
 
-	local parts=()
-	{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && parts+=("$label")
-	[ "$show_bar" = on ] && parts+=("$(render_bar "$pct" "$bar_width" "$bar_full" "$bar_empty")")
-	parts+=("${pct}% used")
-	if [ "$show_reset" = on ] && [ "$have_reset" = 1 ]; then
-		parts+=("· resets in $(human_reset $((reset_epoch - now)))")
+	# Split into two runs so they can be coloured independently: the name tags
+	# (which assistant, which window) versus the reading itself. The threshold
+	# colour is a signal about how much budget is left, so letting it bleed into
+	# a static label makes the whole segment flash red and buries the one part
+	# that actually changed.
+	local names=() parts=()
+	[ -n "$seg_icon" ] && names+=("$seg_icon")
+
+	if [ "$style" = gauge ]; then
+		# Compact form: label, pie, percent. The window name is dropped unless
+		# asked for explicitly — spelling out "Session" defeats the style.
+		[ "$show_label" = on ] && [ -n "$label" ] && names+=("$label")
+		parts+=("$(render_gauge "$pct")")
+		parts+=("${pct}%")
+		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&
+			parts+=("$(human_reset $((reset_epoch - now)))")
+	else
+		{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && names+=("$label")
+		[ "$show_bar" = on ] && parts+=("$(render_bar "$pct" "$bar_width" "$bar_full" "$bar_empty")")
+		parts+=("${pct}% used")
+		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&
+			parts+=("· resets in $(human_reset $((reset_epoch - now)))")
+	fi
+
+	# Emit the label run first, always in its own steady colour. An unset
+	# label colour means "inherit the status line", so nothing is printed and
+	# tmux keeps whatever style is already in effect.
+	if ((${#names[@]})); then
+		if [ -n "$label_color" ]; then
+			printf '#[fg=%s]%s#[default] ' "$label_color" "${names[*]}"
+		else
+			printf '%s ' "${names[*]}"
+		fi
 	fi
 
 	local text="${parts[*]}" color
@@ -94,16 +155,22 @@ window_segment() {
 segments=()
 case "$show" in
 weekly)
-	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label")" && segments+=("$s")
+	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$icon")" && segments+=("$s")
 	;;
 all)
-	s="$(window_segment "$five_pct" "$five_reset" "$session_label")" && segments+=("$s")
-	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label")" && segments+=("$s")
+	s="$(window_segment "$five_pct" "$five_reset" "$session_label" "$icon")" && segments+=("$s")
+	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$icon")" && segments+=("$s")
 	;;
 *)
-	s="$(window_segment "$five_pct" "$five_reset" "$session_label")" && segments+=("$s")
+	s="$(window_segment "$five_pct" "$five_reset" "$session_label" "$icon")" && segments+=("$s")
 	;;
 esac
+
+# Codex reports only a weekly budget on the plans that expose rate_limits at
+# all, so there is no window to choose between here.
+if [ "$codex" = on ]; then
+	s="$(window_segment "$codex_pct" "$codex_reset" "$weekly_label" "$codex_icon")" && segments+=("$s")
+fi
 
 ((${#segments[@]})) || exit 0
 

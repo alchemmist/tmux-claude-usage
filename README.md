@@ -6,9 +6,23 @@
 
 Your Claude usage — progress bar, percent, and reset time — right in the tmux status bar. It uses the official usage data Claude Code already receives — no API calls, no tokens, no rate limits — and updates live as you work.
 
+> **This is a fork** of [docker-run/tmux-claude-usage](https://github.com/docker-run/tmux-claude-usage)
+> that adds two things:
+>
+> - **Codex weekly usage** alongside Claude, read straight out of Codex CLI's own
+>   session logs — see [Codex](#codex).
+> - **A `gauge` render style** that collapses the bar into a single Nerd Font pie
+>   glyph, so two assistants fit in a status line without crowding out the window
+>   list — see [Render styles](#render-styles).
+>
+> Everything upstream does still works unchanged; both additions are off by
+> default.
+
 ## Contents
 
 - [How it works](#how-it-works)
+- [Render styles](#render-styles)
+- [Codex](#codex)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -30,12 +44,76 @@ Two small pieces:
 Because the data comes from Claude itself, it's free and accurate, and refreshes
 whenever Claude renders — continuously while you work.
 
+Codex works the other way round — see [Codex](#codex).
+
+## Render styles
+
+`@claude_usage_style` picks how a window is drawn:
+
+| Style | Looks like | Width |
+| --- | --- | --- |
+| `bar` (default) | `██████░░░░ 62% used · resets in 4 hr` | ~36 cells |
+| `gauge` | `󰪢 62%` | ~7 cells |
+
+`gauge` replaces the multi-cell bar with one `nf-md-circle_slice` glyph, so it
+needs a [Nerd Font](https://www.nerdfonts.com/) v3+. Eight slices is all the
+glyph set offers, so the pie carries the at-a-glance read and the percent beside
+it carries the precision. Two cases are nudged away from plain rounding: any
+usage at all shows at least one slice, and the full circle is reserved for
+`>= 99%`, keeping "nearly out" visually distinct from "out".
+
+Tag each window so you can tell them apart — `@claude_usage_icon` and
+`@claude_usage_codex_icon` take any string, an icon or a plain word:
+
+```tmux
+set -g @claude_usage_style       gauge
+set -g @claude_usage_icon        claude
+set -g @claude_usage_codex_icon  codex
+```
+
+```
+claude 󰪞 6%  codex 󰪤 91%
+```
+
+Labels keep a steady colour while the reading alone tracks the thresholds —
+otherwise a segment goes fully red and buries the part that actually changed.
+Tune it with `@claude_usage_label_color`, or set it to `none` to leave labels
+unstyled and inherit the status line.
+
+## Codex
+
+Codex CLI has no status line hook, so nothing can push usage at us the way
+Claude's harvester does. What it does have is a rollout log per session under
+`$CODEX_HOME/sessions`, where every `token_count` event carries the server's
+`rate_limits` block — so this plugin polls that instead.
+
+Turn it on with:
+
+```tmux
+set -g @claude_usage_codex on
+```
+
+Only the **weekly** window is shown. Codex splits usage across `primary` and
+`secondary`, and which one is the weekly budget depends on the plan — on Plus it
+arrives as `primary` with no secondary at all. So the window is picked by length
+(anything at least a day long) rather than by field name. If a plan only reports
+a short window, nothing is drawn rather than a 5-hour figure mislabelled as
+weekly.
+
+Reading the logs is deliberately cheap: they're read from the end so a
+multi-megabyte rollout isn't streamed front to back, only the five most recently
+modified sessions are consulted, results are cached for 60s, and the scrape runs
+in the background so a slow disk never stalls a redraw.
+
 ## Requirements
 
 - `tmux` 3.0+
 - `jq`
 - Claude Code, signed in with a **Claude Pro or Max** subscription. The usage
   data (`rate_limits`) is sent only to Pro/Max sessions.
+- For `@claude_usage_codex on`: Codex CLI on a plan whose responses include
+  `rate_limits`.
+- For `@claude_usage_style gauge`: a Nerd Font v3+.
 
 ## Installation
 
@@ -111,7 +189,13 @@ override the colors to match your theme (hex values or tmux color names both wor
 | Option | Default | Description |
 | --- | --- | --- |
 | `@claude_usage_show` | `session` | `session`, `weekly`, or `all` |
-| `@claude_usage_show_bar` | `on` | Show the progress bar |
+| `@claude_usage_style` | `bar` | `bar` or `gauge` — see [Render styles](#render-styles) |
+| `@claude_usage_icon` | _(empty)_ | Label before the Claude reading |
+| `@claude_usage_codex` | `off` | Append Codex weekly usage — see [Codex](#codex) |
+| `@claude_usage_codex_icon` | _(empty)_ | Label before the Codex reading |
+| `@claude_usage_label_color` | _(`color_normal`)_ | Colour for labels; `none` inherits the status line |
+| `@claude_usage_gauge_empty` | `󰝦` | Glyph for 0% in `gauge` style |
+| `@claude_usage_show_bar` | `on` | Show the progress bar (`bar` style only) |
 | `@claude_usage_bar_width` | `10` | Bar width in cells |
 | `@claude_usage_bar_full` | `█` | Filled bar character |
 | `@claude_usage_bar_empty` | `░` | Empty bar character |
@@ -156,6 +240,11 @@ e.g. `(stale 2 hr)` once the cache passes that age:
 ```tmux
 set -g @claude_usage_stale_after 1800  # mark stale after 30 min
 ```
+
+Codex doesn't have that problem in the same way: because it's polled rather than
+pushed, the numbers come from whatever the last Codex turn recorded, and a
+re-scrape happens at most once a minute. The staleness marker tracks the Claude
+cache only.
 
 ## Contribution
 

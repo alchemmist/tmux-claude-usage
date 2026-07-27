@@ -11,6 +11,14 @@ usage_cache_file() {
 	printf '%s/.cache/claude-usage/usage' "$HOME"
 }
 
+# Path to the Codex cache. Lives beside the Claude one and is written by
+# scripts/codex.sh, which scrapes usage out of Codex's own session rollout logs.
+# Codex has no statusLine hook, so nothing pushes data at us the way Claude's
+# harvester does — we poll instead, which is why that cache carries a TTL.
+codex_cache_file() {
+	printf '%s/.cache/claude-usage/codex' "$HOME"
+}
+
 # Read a tmux user option, falling back to a default when unset/empty.
 get_tmux_option() {
 	local option="$1" default="$2" value
@@ -31,6 +39,30 @@ render_bar() {
 	for ((i = 0; i < filled; i++)); do out+="$full"; done
 	for ((i = filled; i < width; i++)); do out+="$empty"; done
 	printf '%s' "$out"
+}
+
+# Render the whole bar as one Nerd Font pie glyph (nf-md-circle_slice_1..8),
+# for status lines where a multi-cell bar is too wide. Args: percent.
+#
+# Eight slices is the full resolution the glyph set offers, so the percent
+# figure alongside carries the precision and the pie carries the at-a-glance
+# read. Two edge cases are nudged away from plain rounding: any usage at all
+# shows at least one slice (a non-empty budget must not look untouched), and the
+# full circle is reserved for >=99% (so "nearly out" stays visually distinct
+# from "out").
+render_gauge() {
+	local pct="$1" step
+	local slices=('󰪞' '󰪟' '󰪠' '󰪡' '󰪢' '󰪣' '󰪤' '󰪥')
+	((pct < 0)) && pct=0
+	((pct > 100)) && pct=100
+	step=$(((pct * 8 + 50) / 100))
+	((step == 0 && pct > 0)) && step=1
+	((step == 8 && pct < 99)) && step=7
+	if ((step == 0)); then
+		get_tmux_option @claude_usage_gauge_empty '󰝦'
+	else
+		printf '%s' "${slices[$((step - 1))]}"
+	fi
 }
 
 # Format seconds-until-reset as browser-style text: "4 hr 50 min", "2 days 3 hr".
