@@ -108,48 +108,61 @@ window_segment() {
 		have_reset=0
 	fi
 
-	# Split into two runs so they can be coloured independently: the name tags
-	# (which assistant, which window) versus the reading itself. The threshold
-	# colour is a signal about how much budget is left, so letting it bleed into
-	# a static label makes the whole segment flash red and buries the one part
-	# that actually changed.
-	local names=() parts=()
+	# Three runs, coloured independently. Only the reading — gauge and percent —
+	# tracks the thresholds, because that's the part carrying the "how much
+	# budget is left" signal. The name tags (which assistant, which window) and
+	# the reset countdown are context that shouldn't flash red along with it, so
+	# they both take the steady label colour.
+	local names=() reading=() tail=()
 	[ -n "$seg_icon" ] && names+=("$seg_icon")
 
 	if [ "$style" = gauge ]; then
-		# Compact form: label, pie, percent. The window name is dropped unless
-		# asked for explicitly — spelling out "Session" defeats the style.
-		[ "$show_label" = on ] && [ -n "$label" ] && names+=("$label")
-		parts+=("$(render_gauge "$pct")")
-		parts+=("${pct}%")
+		# Compact form: label, pie, percent, reset. The window name shows when
+		# asked for explicitly, or in `all` mode where two Claude windows sit
+		# side by side and need telling apart.
+		{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && names+=("$label")
+		reading+=("$(render_gauge "$pct")")
+		reading+=("${pct}%")
 		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&
-			parts+=("$(human_reset_short $((reset_epoch - now)))")
+			tail+=("$(human_reset_short $((reset_epoch - now)))")
 	else
 		{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && names+=("$label")
-		[ "$show_bar" = on ] && parts+=("$(render_bar "$pct" "$bar_width" "$bar_full" "$bar_empty")")
-		parts+=("${pct}% used")
+		[ "$show_bar" = on ] && reading+=("$(render_bar "$pct" "$bar_width" "$bar_full" "$bar_empty")")
+		reading+=("${pct}% used")
 		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&
-			parts+=("· resets in $(human_reset $((reset_epoch - now)))")
+			tail+=("· resets in $(human_reset $((reset_epoch - now)))")
 	fi
 
-	# Emit the label run first, always in its own steady colour. An unset
-	# label colour means "inherit the status line", so nothing is printed and
-	# tmux keeps whatever style is already in effect.
-	if ((${#names[@]})); then
+	# Emit text in the steady label colour, no surrounding space (callers own
+	# spacing). An unset label colour means "inherit the status line": print the
+	# text bare and let tmux keep whatever style is in effect.
+	steady_run() {
 		if [ -n "$label_color" ]; then
-			printf '#[fg=%s]%s#[default] ' "$label_color" "${names[*]}"
+			printf '#[fg=%s]%s#[default]' "$label_color" "$*"
 		else
-			printf '%s ' "${names[*]}"
+			printf '%s' "$*"
 		fi
-	fi
+	}
 
-	local text="${parts[*]}" color
+	((${#names[@]})) && { steady_run "${names[*]}"; printf ' '; }
+
+	local color
 	color="$(pick_color "$pct")"
 	if [ -n "$color" ]; then
-		printf '#[fg=%s]%s#[default]' "$color" "$text"
+		printf '#[fg=%s]%s#[default]' "$color" "${reading[*]}"
 	else
-		printf '%s' "$text"
+		printf '%s' "${reading[*]}"
 	fi
+
+	# Reset countdown last, steady like the labels, with a leading space only
+	# when present — so a reset-less segment leaves no trailing gap.
+	((${#tail[@]})) && { printf ' '; steady_run "${tail[*]}"; }
+
+	# Explicit success: the caller appends via `window_segment … && segments+=`,
+	# and the last statement is an arithmetic test that returns 1 when there's
+	# no reset to show — which would silently drop the whole segment. The early
+	# `return 1` paths above (missing data) stay non-zero on purpose.
+	return 0
 }
 
 segments=()

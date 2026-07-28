@@ -75,18 +75,37 @@ set -g @claude_usage_codex_icon  codex
 claude 󰪞 6%  codex 󰪤 91%
 ```
 
-Labels keep a steady colour while the reading alone tracks the thresholds —
-otherwise a segment goes fully red and buries the part that actually changed.
-Tune it with `@claude_usage_label_color`, or set it to `none` to leave labels
-unstyled and inherit the status line.
+Labels and the reset countdown keep a steady colour while the reading alone —
+the gauge and percent — tracks the thresholds; otherwise a segment goes fully
+red and buries the part that actually changed. Tune the steady colour with
+`@claude_usage_label_color`, or set it to `none` to inherit the status line.
 
 Add the time until reset with `@claude_usage_show_reset on`. In `gauge` style
-it's rendered compactly — `1d 3h 38m`, `3h 20m`, `5m` — keeping every non-zero
-unit down to minutes:
+it's rendered as a single coarse unit — a day or more reads in whole days, under
+a day in whole hours, under an hour in minutes (`4d`, `3h`, `5m`):
 
 ```
-claude 󰪢 66% 32m  codex 󰪤 91% 4d 21h 2m
+claude 󰪞 5% 4h  codex 󰪤 91% 4d
 ```
+
+To show both Claude windows — the 5-hour session **and** the 7-day budget — use
+`@claude_usage_show all`. Each window carries its own label so they read apart;
+give them compact names and Codex slots in as a third reading:
+
+```tmux
+set -g @claude_usage_show          all
+set -g @claude_usage_session_label 5h
+set -g @claude_usage_weekly_label  7d
+set -g @claude_usage_codex         on
+set -g @claude_usage_separator     "#[fg=#585858] │ #[default]"
+```
+
+```
+claude 5h 󰪞 5% 4h │ claude 7d 󰪤 82% 2d │ codex 7d 󰪤 97% 4d
+```
+
+`@claude_usage_separator` sits between every reading and may carry its own
+`#[…]` style, so a dim divider doesn't disturb the segment colours.
 
 ## Codex
 
