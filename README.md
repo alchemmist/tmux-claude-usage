@@ -80,6 +80,14 @@ otherwise a segment goes fully red and buries the part that actually changed.
 Tune it with `@claude_usage_label_color`, or set it to `none` to leave labels
 unstyled and inherit the status line.
 
+Add the time until reset with `@claude_usage_show_reset on`. In `gauge` style
+it's rendered compactly — `1d 3h 38m`, `3h 20m`, `5m` — keeping every non-zero
+unit down to minutes:
+
+```
+claude 󰪢 66% 32m  codex 󰪤 91% 4d 21h 2m
+```
+
 ## Codex
 
 Codex CLI has no status line hook, so nothing can push usage at us the way

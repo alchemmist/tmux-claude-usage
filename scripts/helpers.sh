@@ -85,6 +85,24 @@ human_reset() {
 	fi
 }
 
+# Compact seconds-until-reset for the gauge style: "1d 3h 38m", "3h 38m", "5m".
+# Unlike human_reset this keeps every non-zero unit down to minutes, so a
+# multi-day countdown still shows how far into the current hour it is — the
+# gauge is terse enough that the extra characters don't crowd anything. Leading
+# zero units are dropped; a sub-minute remainder still reads "0m" rather than
+# vanishing.
+human_reset_short() {
+	local s="$1" d h m parts=()
+	((s < 0)) && s=0
+	d=$((s / 86400))
+	h=$(((s % 86400) / 3600))
+	m=$(((s % 3600) / 60))
+	((d > 0)) && parts+=("${d}d")
+	((h > 0)) && parts+=("${h}h")
+	{ ((m > 0)) || ((${#parts[@]} == 0)); } && parts+=("${m}m")
+	printf '%s' "${parts[*]}"
+}
+
 # Pick a color for a usage percentage based on the configured thresholds.
 # Prints empty string when the relevant color option is unset (theme-agnostic).
 pick_color() {

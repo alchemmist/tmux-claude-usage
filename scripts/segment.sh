@@ -123,7 +123,7 @@ window_segment() {
 		parts+=("$(render_gauge "$pct")")
 		parts+=("${pct}%")
 		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&
-			parts+=("$(human_reset $((reset_epoch - now)))")
+			parts+=("$(human_reset_short $((reset_epoch - now)))")
 	else
 		{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && names+=("$label")
 		[ "$show_bar" = on ] && parts+=("$(render_bar "$pct" "$bar_width" "$bar_full" "$bar_empty")")
