@@ -117,10 +117,12 @@ window_segment() {
 	[ -n "$seg_icon" ] && names+=("$seg_icon")
 
 	if [ "$style" = gauge ]; then
-		# Compact form: label, pie, percent, reset. The window name shows when
-		# asked for explicitly, or in `all` mode where two Claude windows sit
-		# side by side and need telling apart.
-		{ [ "$show_label" = on ] || [ "$show" = all ]; } && [ -n "$label" ] && names+=("$label")
+		# Compact form: name, pie, percent, reset. The window label (Session/Week)
+		# is off by default — it reads as a duration next to the reset countdown
+		# and doubles up visually. When two Claude windows show at once (`all`),
+		# they're told apart by their reset times (hours vs days). Set
+		# @claude_usage_show_label on to bring the window word back.
+		[ "$show_label" = on ] && [ -n "$label" ] && names+=("$label")
 		reading+=("$(render_gauge "$pct")")
 		reading+=("${pct}%")
 		[ "$show_reset" = on ] && [ "$have_reset" = 1 ] &&

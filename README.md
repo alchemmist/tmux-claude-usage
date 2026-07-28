@@ -89,20 +89,23 @@ claude 󰪞 5% 4h  codex 󰪤 91% 4d
 ```
 
 To show both Claude windows — the 5-hour session **and** the 7-day budget — use
-`@claude_usage_show all`. Each window carries its own label so they read apart;
-give them compact names and Codex slots in as a third reading:
+`@claude_usage_show all`. Each reading is **name → gauge → percent → reset**, and
+the two Claude windows are told apart by their reset times (hours for the
+session, days for the weekly). Codex slots in as a third reading:
 
 ```tmux
-set -g @claude_usage_show          all
-set -g @claude_usage_session_label 5h
-set -g @claude_usage_weekly_label  7d
-set -g @claude_usage_codex         on
-set -g @claude_usage_separator     "#[fg=#585858] │ #[default]"
+set -g @claude_usage_show       all
+set -g @claude_usage_codex      on
+set -g @claude_usage_separator  "#[fg=#585858] │ #[default]"
 ```
 
 ```
-claude 5h 󰪞 5% 4h │ claude 7d 󰪤 82% 2d │ codex 7d 󰪤 97% 4d
+claude 󰪞 5% 4h │ claude 󰪤 82% 2d │ codex 󰪤 97% 4d
 ```
+
+The window label (Session/Week) is off by default in `gauge` style — beside the
+reset countdown it reads like a second duration. Turn it on with
+`@claude_usage_show_label on` if you'd rather name the windows explicitly.
 
 `@claude_usage_separator` sits between every reading and may carry its own
 `#[…]` style, so a dim divider doesn't disturb the segment colours.
