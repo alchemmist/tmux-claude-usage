@@ -39,6 +39,10 @@ separator="$(get_tmux_option @claude_usage_separator '  ')"
 stale_after="$(get_tmux_option @claude_usage_stale_after '')"
 stale_label="$(get_tmux_option @claude_usage_stale_label 'stale')"
 icon="$(get_tmux_option @claude_usage_icon '')"
+# Name for Claude's weekly window when both windows show (`all`). Defaults to the
+# session icon, so the two read alike unless you tell them apart — set it to e.g.
+# "weekly" and the 7-day reading names itself instead of repeating "claude".
+weekly_icon="$(get_tmux_option @claude_usage_weekly_icon "$icon")"
 # Labels hold steady while the reading changes colour. Defaults to the normal
 # (below-threshold) colour, so out of the box a label looks like an unremarkable
 # reading rather than an alarming one. Set it to "none" to leave labels unstyled
@@ -170,11 +174,11 @@ window_segment() {
 segments=()
 case "$show" in
 weekly)
-	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$icon")" && segments+=("$s")
+	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$weekly_icon")" && segments+=("$s")
 	;;
 all)
 	s="$(window_segment "$five_pct" "$five_reset" "$session_label" "$icon")" && segments+=("$s")
-	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$icon")" && segments+=("$s")
+	s="$(window_segment "$seven_pct" "$seven_reset" "$weekly_label" "$weekly_icon")" && segments+=("$s")
 	;;
 *)
 	s="$(window_segment "$five_pct" "$five_reset" "$session_label" "$icon")" && segments+=("$s")

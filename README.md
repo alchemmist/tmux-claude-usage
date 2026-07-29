@@ -89,23 +89,27 @@ claude 󰪞 5% 4h  codex 󰪤 91% 4d
 ```
 
 To show both Claude windows — the 5-hour session **and** the 7-day budget — use
-`@claude_usage_show all`. Each reading is **name → gauge → percent → reset**, and
-the two Claude windows are told apart by their reset times (hours for the
-session, days for the weekly). Codex slots in as a third reading:
+`@claude_usage_show all`. Each reading is **name → gauge → percent → reset**.
+Give the weekly window its own name with `@claude_usage_weekly_icon` so the two
+Claude readings don't both say "claude"; Codex slots in as a third reading:
 
 ```tmux
-set -g @claude_usage_show       all
-set -g @claude_usage_codex      on
-set -g @claude_usage_separator  "#[fg=#585858] │ #[default]"
+set -g @claude_usage_show         all
+set -g @claude_usage_icon         claude
+set -g @claude_usage_weekly_icon  weekly
+set -g @claude_usage_codex        on
+set -g @claude_usage_separator    "#[fg=#585858] │ #[default]"
 ```
 
 ```
-claude 󰪞 5% 4h │ claude 󰪤 82% 2d │ codex 󰪤 97% 4d
+claude 󰪞 5% 4h │ weekly 󰪤 82% 2d │ codex 󰪤 97% 4d
 ```
 
-The window label (Session/Week) is off by default in `gauge` style — beside the
-reset countdown it reads like a second duration. Turn it on with
-`@claude_usage_show_label on` if you'd rather name the windows explicitly.
+`@claude_usage_weekly_icon` defaults to `@claude_usage_icon`, so without it both
+Claude readings share a name and you tell them apart by reset time (hours for
+the session, days for the weekly). The window label (Session/Week) is a separate
+knob, off by default in `gauge` style — beside the reset countdown it reads like
+a second duration; turn it on with `@claude_usage_show_label on` if you prefer.
 
 `@claude_usage_separator` sits between every reading and may carry its own
 `#[…]` style, so a dim divider doesn't disturb the segment colours.
@@ -221,6 +225,7 @@ override the colors to match your theme (hex values or tmux color names both wor
 | `@claude_usage_show` | `session` | `session`, `weekly`, or `all` |
 | `@claude_usage_style` | `bar` | `bar` or `gauge` — see [Render styles](#render-styles) |
 | `@claude_usage_icon` | _(empty)_ | Label before the Claude reading |
+| `@claude_usage_weekly_icon` | _(`icon`)_ | Label before Claude's weekly reading in `all` mode |
 | `@claude_usage_codex` | `off` | Append Codex weekly usage — see [Codex](#codex) |
 | `@claude_usage_codex_icon` | _(empty)_ | Label before the Codex reading |
 | `@claude_usage_label_color` | _(`color_normal`)_ | Colour for labels; `none` inherits the status line |
